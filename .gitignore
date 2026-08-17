@@ -7,6 +7,10 @@
 creditcard.csv
 *.csv
 
+# Large model binaries (>50MB, use Git LFS or cloud storage)
+models/anomaly_engine.pkl
+models/*.pkl
+
 # Python runtime artifacts
 __pycache__/
 *.py[cod]
