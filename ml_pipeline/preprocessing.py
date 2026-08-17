@@ -112,9 +112,55 @@ class FraudDataPreprocessor:
     def fit_transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
         return self.fit(X, y).transform(X)
 
+    def prepare_train_val_test_split(
+        self,
+        df: pd.DataFrame,
+        val_size: float = 0.2,
+        test_size: float = 0.2,
+        random_state: int = 42
+    ):
+        """
+        Proper three-way stratified split (train / validation / test).
+
+        Sizes are expressed as fractions of the **full** dataset:
+          - train : 1 - val_size - test_size  (default 60%)
+          - val   : val_size                  (default 20%)  — for threshold tuning & model selection
+          - test  : test_size                 (default 20%)  — final held-out evaluation only
+
+        This prevents threshold look-ahead bias: the test set is never seen
+        during training or model selection.
+        """
+        X = df.drop(columns=['Class'])
+        y = df['Class']
+
+        # First carve off the test set
+        X_temp, X_test, y_temp, y_test = train_test_split(
+            X, y,
+            test_size=test_size,
+            random_state=random_state,
+            stratify=y
+        )
+
+        # Then split the remainder into train / val
+        relative_val = val_size / (1.0 - test_size)
+        X_train, X_val, y_train, y_val = train_test_split(
+            X_temp, y_temp,
+            test_size=relative_val,
+            random_state=random_state,
+            stratify=y_temp
+        )
+
+        print(
+            f"[Preprocessing] Train : {X_train.shape} | Fraud: {int(y_train.sum()):,} ({y_train.mean()*100:.3f}%)\n"
+            f"[Preprocessing] Val   : {X_val.shape}   | Fraud: {int(y_val.sum()):,} ({y_val.mean()*100:.3f}%)\n"
+            f"[Preprocessing] Test  : {X_test.shape}  | Fraud: {int(y_test.sum()):,} ({y_test.mean()*100:.3f}%)"
+        )
+        return X_train, X_val, X_test, y_train, y_val, y_test
+
     def prepare_train_test_split(self, df: pd.DataFrame, test_size: float = 0.2, random_state: int = 42):
         """
-        Stratified train-test split to ensure representative fraud distribution.
+        Backward-compatible stratified train-test split (80/20).
+        Prefer prepare_train_val_test_split() for new training runs.
         """
         X = df.drop(columns=['Class'])
         y = df['Class']

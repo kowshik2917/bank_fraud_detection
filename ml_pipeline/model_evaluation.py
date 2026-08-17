@@ -8,6 +8,7 @@ import os
 import json
 import numpy as np
 import pandas as pd
+from typing import Optional
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -39,64 +40,74 @@ class FraudModelEvaluator:
         model_name: str,
         X_test: pd.DataFrame,
         y_test: pd.Series,
-        cost_fp: float = 10.0,    # Operational cost to investigate a false positive ($10)
-        cost_fn_mult: float = 1.0 # Loss multiplier for undetected fraud (100% of transaction amount)
+        threshold: Optional[float] = None,   # Pass validation-tuned threshold here
+        cost_fp: float = 10.0,
+        cost_fn_mult: float = 1.0
     ) -> dict:
-        """Execute full evaluation suite for a trained model."""
+        """Execute full evaluation suite for a trained model.
+
+        Args:
+            threshold: Decision threshold selected on the **validation set** by
+                       FraudModelTrainer.  When None, falls back to the PR-curve
+                       optimal threshold computed on the test set (legacy mode —
+                       inflates reported metrics; avoid for final reporting).
+        """
         print("=" * 80)
         print(f" EVALUATING MODEL: {model_name}")
+        if threshold is not None:
+            print(f" Using pre-computed validation threshold: {threshold:.4f}")
+        else:
+            print(" WARNING: No validation threshold supplied — tuning on test set (optimistic bias).")
         print("=" * 80)
 
-        # Probabilities and default 0.5 threshold predictions
         if hasattr(model, "predict_proba"):
             y_prob = model.predict_proba(X_test)[:, 1]
         else:
             y_prob = model.predict(X_test)
-        y_pred_default = (y_prob >= 0.5).astype(int)
 
-        # 1. Confusion Matrix
-        cm = confusion_matrix(y_test, y_pred_default)
-        tn, fp, fn, tp = cm.ravel()
-        
-        # 2. Classification Report
-        clf_rep = classification_report(y_test, y_pred_default, output_dict=True, zero_division=0)
-        
-        # 3. Precision Recall Curve & Optimal F1 Threshold
-        precision, recall, thresholds = precision_recall_curve(y_test, y_prob)
+        # 1. PR Curve & optimal F1 threshold (kept for plot / reference)
+        precision_curve, recall_curve, thresholds_curve = precision_recall_curve(y_test, y_prob)
         pr_auc = average_precision_score(y_test, y_prob)
-        
-        # Find threshold maximizing F1 score
-        f1_scores = 2 * (precision * recall) / (precision + recall + 1e-10)
-        best_idx = np.argmax(f1_scores)
-        best_threshold = float(thresholds[best_idx]) if best_idx < len(thresholds) else 0.5
-        best_f1 = float(f1_scores[best_idx])
-        best_prec = float(precision[best_idx])
-        best_rec = float(recall[best_idx])
+        f1_curve = 2 * (precision_curve * recall_curve) / (precision_curve + recall_curve + 1e-10)
+        best_idx = np.argmax(f1_curve)
+        test_optimal_threshold = float(thresholds_curve[best_idx]) if best_idx < len(thresholds_curve) else 0.5
+
+        # Decide which threshold to use for confusion matrix / classification report
+        eval_threshold = threshold if threshold is not None else test_optimal_threshold
+        threshold_label = "validation-tuned" if threshold is not None else "test-optimal (bias risk)"
+
+        y_pred = (y_prob >= eval_threshold).astype(int)
+
+        # 2. Confusion Matrix
+        cm = confusion_matrix(y_test, y_pred)
+        tn, fp, fn, tp = cm.ravel()
+
+        # 3. Classification Report
+        clf_rep = classification_report(y_test, y_pred, output_dict=True, zero_division=0)
 
         # 4. ROC Curve
         fpr, tpr, _ = roc_curve(y_test, y_prob)
         roc_auc = auc(fpr, tpr)
 
-        # Summary
         self.evaluation_summary = {
             "model_name": model_name,
+            "threshold_used": round(eval_threshold, 4),
+            "threshold_source": threshold_label,
             "confusion_matrix": {
                 "true_negatives": int(tn),
                 "false_positives": int(fp),
                 "false_negatives": int(fn),
                 "true_positives": int(tp)
             },
-            "metrics_at_0_5": {
+            "metrics_at_eval_threshold": {
                 "precision": round(float(clf_rep['1']['precision']), 4),
                 "recall": round(float(clf_rep['1']['recall']), 4),
                 "f1_score": round(float(clf_rep['1']['f1-score']), 4),
                 "accuracy": round(float(clf_rep['accuracy']), 4)
             },
-            "optimal_threshold_tuning": {
-                "optimal_threshold": round(best_threshold, 4),
-                "max_f1_score": round(best_f1, 4),
-                "precision_at_optimal": round(best_prec, 4),
-                "recall_at_optimal": round(best_rec, 4)
+            "test_optimal_threshold_reference": {
+                "test_optimal_threshold": round(test_optimal_threshold, 4),
+                "note": "Reported for reference only — NOT used for metrics above."
             },
             "area_under_curves": {
                 "PR_AUC": round(float(pr_auc), 4),
@@ -104,17 +115,24 @@ class FraudModelEvaluator:
             }
         }
 
-        print(f"Confusion Matrix (Threshold=0.5): TN={tn:,}, FP={fp:,}, FN={fn:,}, TP={tp:,}")
-        print(f"PR-AUC (Average Precision): {pr_auc:.4f} | ROC-AUC: {roc_auc:.4f}")
-        print(f"Optimal Decision Threshold: {best_threshold:.4f} (Yields F1={best_f1:.4f}, Recall={best_rec:.4f}, Precision={best_prec:.4f})\n")
+        print(f"Threshold ({threshold_label}): {eval_threshold:.4f}")
+        print(f"Confusion Matrix: TN={tn:,}, FP={fp:,}, FN={fn:,}, TP={tp:,}")
+        print(f"PR-AUC: {pr_auc:.4f} | ROC-AUC: {roc_auc:.4f}")
+        print(
+            f"Precision={clf_rep['1']['precision']:.4f} | "
+            f"Recall={clf_rep['1']['recall']:.4f} | "
+            f"F1={clf_rep['1']['f1-score']:.4f}\n"
+        )
 
-        # Generate Visualizations
         self._plot_confusion_matrix(cm, model_name)
-        self._plot_curves(fpr, tpr, roc_auc, recall, precision, pr_auc, model_name)
-        self._plot_threshold_analysis(thresholds, precision[:-1], recall[:-1], f1_scores[:-1], best_threshold, model_name)
+        self._plot_curves(fpr, tpr, roc_auc, recall_curve, precision_curve, pr_auc, model_name)
+        self._plot_threshold_analysis(
+            thresholds_curve,
+            precision_curve[:-1], recall_curve[:-1], f1_curve[:-1],
+            eval_threshold, model_name
+        )
         self._plot_feature_importance(model, X_test.columns.tolist(), model_name)
 
-        # Export JSON
         out_path = os.path.join(self.output_dir, "evaluation_report.json")
         with open(out_path, "w") as f:
             json.dump(self.evaluation_summary, f, indent=2)

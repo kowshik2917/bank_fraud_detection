@@ -3,17 +3,39 @@ Auth Route - User Login & Registration
 Intelligent Banking Fraud Detection Platform
 """
 
+import bcrypt
+import re
 import hashlib
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from backend.database import db_instance
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 
 
 def _hash_password(password: str) -> str:
-    """Simple SHA-256 hash. Replace with bcrypt in production."""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hash a plain-text password with bcrypt (salted, adaptive cost)."""
+    pwd_bytes = password.encode('utf-8')[:72]
+    salt = bcrypt.gensalt(rounds=12)
+    return bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
+
+
+def _verify_password(plain: str, hashed: str) -> bool:
+    """Verify a plain password against a stored bcrypt hash."""
+    try:
+        return bcrypt.checkpw(plain.encode('utf-8')[:72], hashed.encode('utf-8'))
+    except Exception:
+        return False
+
+
+def _is_legacy_sha256(hashed: str) -> bool:
+    """Detect old SHA-256 hex hashes (pre-bcrypt migration)."""
+    return bool(re.fullmatch(r'[0-9a-f]{64}', hashed or ''))
+
+
+def _sha256_hash(password: str) -> str:
+    """Compute SHA-256 for migration comparison only."""
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
 
 class LoginRequest(BaseModel):
@@ -33,11 +55,13 @@ class RegisterRequest(BaseModel):
 def login(req: LoginRequest):
     """
     Authenticate a user.
-    - If the user does not exist in MongoDB, auto-creates them (first-time login).
-    - If the user exists, verifies the password hash.
+
+    - First-time login (user not in DB): auto-registers with a bcrypt password hash.
+    - Existing user with bcrypt hash: verifies with bcrypt.
+    - Existing user with legacy SHA-256 hash: transparently re-hashes to bcrypt on
+      successful login (one-time migration, zero user friction).
     """
     existing = db_instance.get_user_by_email(req.email)
-    pw_hash = _hash_password(req.password)
 
     if existing is None:
         # Auto-register on first login
@@ -46,37 +70,49 @@ def login(req: LoginRequest):
         user_record = {
             "email": req.email,
             "name": req.name,
-            "password_hash": pw_hash,
+            "password_hash": _hash_password(req.password),
             "role": "analyst",
             "initials": "".join(part[0] for part in req.name.strip().split())[:2].upper()
         }
         profile = db_instance.upsert_user(user_record)
         return {"status": "registered", "profile": profile}
-    else:
-        if existing.get("password_hash") != pw_hash:
+
+    stored_hash = existing.get("password_hash", "")
+
+    # --- Legacy SHA-256 migration path ---
+    if _is_legacy_sha256(stored_hash):
+        if _sha256_hash(req.password) != stored_hash:
             raise HTTPException(status_code=401, detail="Invalid credentials.")
-        # Update last_login timestamp
-        profile = db_instance.upsert_user({
-            "email": req.email,
-            "name": existing.get("name", req.name),
-            "password_hash": pw_hash,
-            "role": existing.get("role", "analyst"),
-            "initials": existing.get("initials", "")
-        })
-        return {"status": "authenticated", "profile": profile}
+        # Password matched: silently upgrade to bcrypt
+        new_hash = _hash_password(req.password)
+        existing["password_hash"] = new_hash
+        db_instance.upsert_user(existing)
+        stored_hash = new_hash  # continue with updated hash
+
+    # --- Normal bcrypt verification ---
+    if not _verify_password(req.password, stored_hash):
+        raise HTTPException(status_code=401, detail="Invalid credentials.")
+
+    profile = db_instance.upsert_user({
+        "email": req.email,
+        "name": existing.get("name", req.name),
+        "password_hash": stored_hash,
+        "role": existing.get("role", "analyst"),
+        "initials": existing.get("initials", "")
+    })
+    return {"status": "authenticated", "profile": profile}
 
 
 @router.post("/register")
 def register(req: RegisterRequest):
-    """Explicitly register a new analyst account."""
+    """Explicitly register a new analyst account with a bcrypt password hash."""
     existing = db_instance.get_user_by_email(req.email)
     if existing:
         raise HTTPException(status_code=409, detail="Email already registered.")
-    pw_hash = _hash_password(req.password)
     user_record = {
         "email": req.email,
         "name": req.name,
-        "password_hash": pw_hash,
+        "password_hash": _hash_password(req.password),
         "role": req.role,
         "initials": "".join(part[0] for part in req.name.strip().split())[:2].upper()
     }
@@ -86,7 +122,7 @@ def register(req: RegisterRequest):
 
 @router.get("/users")
 def list_users():
-    """List all registered analysts (admin use)."""
+    """List all registered analysts (admin use). Password hashes are never returned."""
     if db_instance.is_connected:
         users = list(db_instance.db.users.find({}, {"_id": 0, "password_hash": 0}))
     else:

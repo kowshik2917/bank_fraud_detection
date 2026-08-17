@@ -99,9 +99,12 @@ def predict_transaction(txn: TransactionInput, x_user_email: Optional[str] = Hea
                 df_pre = pre.transform(df_clean)
                 df_feat = fe.transform(df_pre)
 
-                model_name, model, _ = model_bundle
+                model_name = model_bundle[0]
+                model = model_bundle[1]
+                best_threshold = model_bundle[2] if len(model_bundle) >= 4 and isinstance(model_bundle[2], (int, float)) else 0.5
+
                 if hasattr(model, "feature_names_in_"):
-                    df_feat = df_feat[model.feature_names_in_]
+                    df_feat = df_feat[[c for c in model.feature_names_in_ if c in df_feat.columns]]
 
                 if hasattr(model, "predict_proba"):
                     prob = float(model.predict_proba(df_feat)[0, 1])

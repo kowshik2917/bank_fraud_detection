@@ -14,20 +14,34 @@ from sklearn.base import BaseEstimator, TransformerMixin
 class FraudFeatureEngineer(BaseEstimator, TransformerMixin):
     """
     Advanced Feature Engineering Engine for Fraud Analytics:
-    
+
     1. Time-Based Cyclical Features:
-       - HourOfDay: Modulo hour of day (0-23).
-       - Sin_Hour / Cos_Hour: Cyclical harmonic projection capturing night-time high fraud susceptibility.
-    
+       - Hour: Raw hour-of-day (0–23) derived from the 'Time' column.
+       - Sin_Hour / Cos_Hour: Cyclical harmonic projections capturing
+         night-time fraud susceptibility without a discontinuity at midnight.
+       - Is_Night_Transaction: Binary flag for the 23:00–06:00 window.
+
     2. Spending & Amount Profiling:
-       - Amount_Log: log1p(Amount) compressing long-tailed distribution.
-       - Amount_Category: Discrete tiers (Micro, Low, Medium, High, Whale) capturing fraud behavior clusters.
-       - Amount_Deviation_Z: Standardized z-score deviation against population mean.
-    
+       - Amount_Log: log1p(Amount) compressing the long-tailed distribution.
+       - Amount_Tier: Discrete spend tiers (Micro/Low/Medium/High/Whale).
+       - Amount_Deviation_Z: Z-score deviation against the training-set mean.
+
     3. Anomaly & Risk Indicators:
-       - V_Extreme_Count: Number of PCA latent components exceeding +/- 3 sigma for a single transaction.
-       - Top_Fraud_Risk_Index: Weighted composite index based on top inverse-correlated PCA components (V14, V12, V10, V17).
-       - Velocity_Proxy: Simulated rolling transaction frequency index based on timestamp proximity.
+       - V_Extreme_Count: Number of PCA latent components exceeding ±3σ for
+         a single transaction.
+       - Risk_Indicator_Index: Weighted composite of the top fraud-correlated
+         PCA features (V14, V12, V10, V17, V4, V11).
+
+    4. Temporal Gap Feature:
+       - Time_Since_Prev_Global: log1p of seconds elapsed since the previous
+         transaction in globally sorted order (capped at 3 600 s / 1 h).
+         Captures burst activity windows across the dataset.
+
+         NOTE: True per-cardholder velocity (e.g., "3 txns in 10 min for
+         card X") is not computable because the public creditcard.csv dataset
+         contains no cardholder identifier (PCA-anonymised). The former
+         'Velocity_Proxy' feature was removed as it was row-order dependent
+         and did not represent real velocity.
     """
 
     def __init__(self, models_dir: str = "models"):
@@ -95,13 +109,27 @@ class FraudFeatureEngineer(BaseEstimator, TransformerMixin):
             if 'V11' in df.columns: risk_expr += 0.8 * df['V11']
             df['Risk_Indicator_Index'] = risk_expr
 
-        # 4. Local Transaction Velocity Proxy
+        # 4. Global inter-transaction time gap (replaces Velocity_Proxy)
+        #
+        # Velocity_Proxy (removed) computed 1/time_diff on the *batch row order*,
+        # which is meaningless — the value changed with DataFrame sort order and
+        # had no relationship to real transaction velocity for a cardholder.
+        #
+        # Time_Since_Prev_Global: seconds elapsed since the immediately preceding
+        # transaction in the dataset, after sorting by the 'Time' column.
+        # This is a genuine dataset-level temporal feature that captures burst
+        # periods of activity across all cards.
+        #
+        # Limitation: True *per-cardholder* velocity (e.g., "3 txns in 10 min for
+        # card X") would require a cardholder sequence identifier, which the public
+        # creditcard.csv dataset does not contain due to PCA anonymisation.
         if 'Time' in df.columns:
-            # Time delta between subsequent transactions in the batch
-            time_diff = df['Time'].diff().fillna(1.0)
-            df['Velocity_Proxy'] = 1.0 / np.maximum(time_diff, 0.01)
-            # Clip extreme velocity values
-            df['Velocity_Proxy'] = np.clip(df['Velocity_Proxy'], 0.0, 100.0)
+            sorted_time = df['Time'].sort_values()
+            time_gap = sorted_time.diff().fillna(sorted_time.iloc[0] if len(sorted_time) > 0 else 0.0)
+            # Map back to original index
+            time_gap = time_gap.reindex(df.index)
+            # Cap at 1 hour (3600 s) and log-scale to compress long tail
+            df['Time_Since_Prev_Global'] = np.log1p(np.clip(time_gap.fillna(0.0), 0.0, 3600.0))
 
         return df
 

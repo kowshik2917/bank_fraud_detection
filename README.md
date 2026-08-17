@@ -1,107 +1,150 @@
-# Sentinel: Intelligent Banking Fraud Detection & Investigation Platform
+# Sentinel: Banking Fraud Detection & Investigation Platform
 
 ![FastAPI](https://img.shields.io/badge/Backend-FastAPI%20%7C%20Python%203.11-009688?style=for-the-badge&logo=fastapi)
-![React](https://img.shields.io/badge/Frontend-React%2018%20%7C%20Vite%20%7C%20Tailwind-61DAFB?style=for-the-badge&logo=react)
+![React](https://img.shields.io/badge/Frontend-React%2018%20%7C%20Vite-61DAFB?style=for-the-badge&logo=react)
 ![XGBoost](https://img.shields.io/badge/ML%20Engine-XGBoost%20%7C%20CatBoost%20%7C%20SHAP-FF6F00?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security-PCI--DSS%20Compliant%20Audit-10B981?style=for-the-badge)
+![MongoDB](https://img.shields.io/badge/Database-MongoDB%204.6-47A248?style=for-the-badge&logo=mongodb)
 
-An enterprise-grade, real-time Banking Fraud Detection, Explainable AI, Threat Triage, and Forensic PDF Investigation platform built on the Credit Card Fraud Detection dataset (284,807 transactions).
-
----
-
-## 🏛️ Comprehensive 14-Module Architecture
-
-| Module | Role | Core Responsibility | Artifact / Code |
-|---|---|---|---|
-| **Module 1: EDA & Data Understanding** | Senior Data Scientist | Comprehensive class skew, Tukey outlier detection, PCA correlations, temporal 48h cycles | `ml_pipeline/eda.py` |
-| **Module 2: Data Preprocessing** | ML Engineer | Production Winsorization (IQR capping), Robust scaling, Stratified 80/20 splitting | `ml_pipeline/preprocessing.py` |
-| **Module 3: Feature Engineering** | Fraud Analytics Engineer | Cyclical hour harmonics, $\log_{1p}(\text{Amount})$ deviations, PCA extreme indices, velocity proxy | `ml_pipeline/feature_engineering.py` |
-| **Module 4: Imbalanced Data Handling** | Fraud ML Specialist | SMOTE, ADASYN, cost-sensitive `scale_pos_weight` benchmark evaluations | `ml_pipeline/imbalance_handler.py` |
-| **Module 5: Fraud Detection Models** | Senior ML Engineer | Logistic Regression, Random Forest, CatBoost, and XGBoost training & model selection | `ml_pipeline/model_training.py` |
-| **Module 6: Model Evaluation** | AI Evaluation Specialist | Confusion matrices, PR-AUC curves, ROC-AUC, threshold optimization curves, feature importances | `ml_pipeline/model_evaluation.py` |
-| **Module 7: Explainable AI (SHAP)** | Explainable AI Expert | TreeExplainer attribution, waterfall diagrams, beeswarm plots, automated human reason codes | `ml_pipeline/explainability.py` |
-| **Module 8: Anomaly Detection** | Fraud Specialist | Unsupervised Isolation Forest and Local Outlier Factor (LOF) normalized outlier scoring | `ml_pipeline/anomaly_detection.py` |
-| **Module 9: Risk Scoring Engine** | Risk Analytics Engineer | Calibrated 0–100 multi-factor risk score (Supervised + Anomaly + Heuristic rules) with Low/Med/High/Critical tiers | `ml_pipeline/risk_engine.py` |
-| **Module 10: MongoDB Integration** | Backend Engineer | Collections (`transactions`, `alerts`, `investigations`, `reports`) with resilient local fallback | `backend/database.py` |
-| **Module 11: FastAPI Production Backend** | Senior Backend Engineer | Endpoints (`/predict`, `/batch-predict`, `/anomaly`, `/transactions`, `/alerts`, `/dashboard`, `/reports`) | `backend/` |
-| **Module 12: React Investigation Dashboard** | Senior Frontend Engineer | 6 pages: Dashboard Overview, Explorer, Fraud Analytics, SHAP, Alerts Center, Reports Page | `frontend/` |
-| **Module 13: Forensic PDF Dossiers** | Reporting Engineer | ReportLab audit-ready PDF dossiers with transaction data, risk breakdown, SHAP drivers, and SHA-256 hash | `ml_pipeline/pdf_generator.py` |
-| **Module 14: Cloud Deployment** | DevOps Engineer | Native FastAPI on Render, React Vite on Vercel, MongoDB Atlas database | `deployment/` |
+A real-time Banking Fraud Detection, Explainable AI, Threat Triage, and Forensic PDF Investigation platform built on the [Credit Card Fraud Detection dataset](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) (284,807 transactions).
 
 ---
 
-## 🚀 Quick Start (Local Run)
+## 🏛️ Architecture Overview
 
-### 1. Backend & ML Execution
+| Module | Core Responsibility | Artifact |
+|---|---|---|
+| **EDA** | Class skew, Tukey outlier detection, PCA correlations, temporal cycles | `ml_pipeline/eda.py` |
+| **Preprocessing** | Winsorization (IQR), Robust scaling, Stratified 60/20/20 split | `ml_pipeline/preprocessing.py` |
+| **Feature Engineering** | Cyclical time harmonics, log-Amount, PCA extreme counts, inter-transaction gap | `ml_pipeline/feature_engineering.py` |
+| **Imbalance Handling** | SMOTE, ADASYN, cost-sensitive `scale_pos_weight` benchmark | `ml_pipeline/imbalance_handler.py` |
+| **Model Training** | Logistic Regression, Random Forest, XGBoost, CatBoost; validation-tuned threshold | `ml_pipeline/model_training.py` |
+| **Model Evaluation** | Confusion matrix, PR-AUC, ROC-AUC, threshold curves at validation-selected threshold | `ml_pipeline/model_evaluation.py` |
+| **Explainable AI (SHAP)** | TreeExplainer attribution, waterfall, beeswarm, automated reason codes | `ml_pipeline/explainability.py` |
+| **Anomaly Detection** | Isolation Forest + LOF normalized outlier scoring | `ml_pipeline/anomaly_detection.py` |
+| **Risk Scoring Engine** | Calibrated 0–100 composite score (Supervised + Anomaly + Heuristics) | `ml_pipeline/risk_engine.py` |
+| **MongoDB** | Collections: `transactions`, `alerts`, `users`, `reports`, `search_logs` | `backend/database.py` |
+| **FastAPI Backend** | Endpoints: `/predict`, `/transactions`, `/alerts`, `/dashboard`, `/reports`, `/auth` | `backend/` |
+| **React Dashboard** | 6 pages: Dashboard, Transaction Explorer, Fraud Analytics, SHAP, Alerts Center, Reports | `frontend/` |
+| **PDF Dossiers** | ReportLab forensic PDFs with risk breakdown, SHAP drivers, and SHA-256 audit hash | `ml_pipeline/pdf_generator.py` |
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Python 3.11+
+- Node.js 18+
+- MongoDB running locally on `mongodb://127.0.0.1:27017`
+- `creditcard.csv` downloaded from [Kaggle](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) and placed in the project root (**not committed to git — too large**)
+
+### 1. Backend Setup
 
 ```bash
-# 1. Install Python dependencies
+# Install Python dependencies (includes bcrypt, passlib, FastAPI, XGBoost, etc.)
 pip install -r backend/requirements.txt
 
-# 2. Run end-to-end ML Training & Artifact Serialization
+# (Optional) Re-train all ML models from scratch — requires creditcard.csv
 python ml_pipeline/run_pipeline.py
 
-# 3. Seed Database with sample transactions and active alerts
-python backend/seed_db.py
-
-# 4. Start FastAPI Production Server
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+# Start FastAPI server on port 8005
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8005 --reload
 ```
-API Documentation is live at: **`http://localhost:8000/docs`**
 
-### 2. Frontend React Dashboard
+API docs: **`http://localhost:8005/docs`**
+
+### 2. Frontend Setup
 
 ```bash
-# 1. Navigate to frontend directory
 cd frontend
-
-# 2. Install Node dependencies
 npm install
-
-# 3. Launch Development Server
 npm run dev
 ```
-Dashboard is live at: **`http://localhost:3000`**
 
-### MongoDB Atlas persistence
+Dashboard: **`http://localhost:3000`**
 
-The API stores scored transactions and automatically created high-risk alerts in MongoDB whenever `MONGODB_URI` is set. Copy `deployment/.env.example` to a local `.env` file (do not commit it), add your Atlas connection string, and start the backend with that environment variable available. Without it, Sentinel uses an in-memory store, so live metrics reset when the backend restarts.
+### 3. MongoDB
 
-Dashboard KPIs are calculated from the transactions scored by Sentinel. Run a fraud simulation to create a HIGH/CRITICAL transaction and an OPEN alert; both will update the dashboard and Alerts Center.
+The backend connects to `mongodb://127.0.0.1:27017` by default (database: `fraud_platform_db`).
+To use MongoDB Atlas, set `MONGODB_URI` in a `.env` file (see `deployment/.env.example`).
 
 ---
 
-## 📊 Calibrated Multi-Factor Risk Scoring Formula
+## 📊 Risk Scoring Formula
 
 $$\text{Final Risk Score} = 100 \times \left( 0.65 \times P_{\text{XGBoost}} + 0.25 \times \frac{S_{\text{IsoForest}}}{100} + 0.10 \times \frac{S_{\text{Heuristics}}}{100} \right)$$
 
-### Operational Decision Tiers:
-- **`LOW` (0.0 – 29.9)**: Frictionless Auto-Approval
-- **`MEDIUM` (30.0 – 59.9)**: Step-Up Authentication (2FA / Biometric Challenge)
-- **`HIGH` (60.0 – 84.9)**: Hold for Fraud Analyst Queue Review
-- **`CRITICAL` (85.0 – 100.0)**: Immediate Auto-Termination & Card Lock
+| Tier | Score | Action |
+|---|---|---|
+| **LOW** | 0 – 29.9 | Frictionless auto-approval |
+| **MEDIUM** | 30 – 59.9 | Step-up authentication (2FA / Biometric) |
+| **HIGH** | 60 – 84.9 | Hold for fraud analyst queue review |
+| **CRITICAL** | 85 – 100 | Immediate block & card lock |
 
 ---
 
-## 🌐 Production Cloud Deployment Guide (Non-Docker)
+## 🔬 ML Methodology
 
-### Deploy Backend on Render:
-1. Push this repository to your GitHub.
-2. In Render dashboard, create a new **Web Service** pointing to your repo.
-3. Configure settings:
-   - **Runtime**: Python 3.11
-   - **Build Command**: `pip install -r backend/requirements.txt`
-   - **Start Command**: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
-4. Set Environment Variables:
-   - `MONGODB_URI`: `<your-mongodb-atlas-connection-string>`
+### Train / Validation / Test Split (60 / 20 / 20)
 
-### Deploy Frontend on Vercel:
-1. In Vercel dashboard, import your GitHub repository.
-2. Configure settings:
-   - **Root Directory**: `frontend`
-   - **Framework Preset**: `Vite`
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
-3. In Environment Variables, set:
-   - `VITE_API_URL`: `https://your-backend-service.onrender.com`
-4. Click **Deploy**.
+The dataset is split into three disjoint stratified folds:
+
+- **Train (60%)** — all model parameters fitted here.
+- **Validation (20%)** — decision threshold tuned by F1 maximisation; model selection by PR-AUC. The test set is **never seen** during this phase.
+- **Test (20%)** — final held-out evaluation only, at the validation-tuned threshold. Prevents look-ahead bias in reported metrics.
+
+### Validation-Based Threshold Selection
+
+Each model's optimal decision threshold is found on the validation set (not test), then applied at inference time. The threshold is saved inside `models/best_fraud_model.pkl`.
+
+### Feature Engineering
+
+| Feature | Description |
+|---|---|
+| `Hour`, `Sin_Hour`, `Cos_Hour` | Cyclical time-of-day encoding |
+| `Is_Night_Transaction` | Flag for 23:00–06:00 window |
+| `Amount_Log`, `Amount_Tier`, `Amount_Deviation_Z` | Spend profiling |
+| `V_Extreme_Count` | PCA components exceeding ±3σ |
+| `Risk_Indicator_Index` | Weighted composite of top fraud-correlated PCA features |
+| `Time_Since_Prev_Global` | log1p inter-transaction gap (globally sorted) |
+
+> **Note on velocity features**: True per-cardholder transaction velocity (e.g., "3 txns in 10 min for card X") is not computable from this dataset because the public `creditcard.csv` contains no cardholder identifier — all features V1–V28 are PCA-transformed for anonymisation. The former `Velocity_Proxy` was removed as it was row-order dependent and had no real meaning.
+
+---
+
+## 🔒 Security
+
+- **Passwords** are hashed with **bcrypt** (salted, adaptive cost via `passlib`). SHA-256 is not used.
+- **Transparent migration**: existing accounts with legacy SHA-256 hashes are silently re-hashed to bcrypt on next successful login.
+- Each analyst's workspace is isolated by `X-User-Email` header — transactions, alerts, and reports are user-scoped.
+- Password hashes are never returned by any API endpoint.
+
+---
+
+## ⚠️ Known Limitations
+
+| Limitation | Detail |
+|---|---|
+| Per-cardholder velocity | Not available — no cardholder ID in PCA-anonymised dataset |
+| `creditcard.csv` not in repo | 143 MB; download from Kaggle separately |
+| `models/anomaly_engine.pkl` not in repo | 83 MB; regenerate with `python ml_pipeline/run_pipeline.py` |
+| No real-time WebSocket push | Dashboard polls every 30 s; WebSocket support planned |
+
+---
+
+## 🌐 Cloud Deployment (Non-Docker)
+
+### Backend on Render
+
+1. Push this repo to GitHub (without `creditcard.csv` or large `.pkl` files).
+2. Create a **Web Service** in Render pointing to the repo.
+3. Set Build Command: `pip install -r backend/requirements.txt`
+4. Set Start Command: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
+5. Add env var: `MONGODB_URI` = your MongoDB Atlas connection string.
+
+### Frontend on Vercel
+
+1. Import the GitHub repo in Vercel.
+2. Root Directory: `frontend` | Framework: `Vite`
+3. Build Command: `npm run build` | Output: `dist`
+4. Add env var: `VITE_API_URL` = your Render backend URL.

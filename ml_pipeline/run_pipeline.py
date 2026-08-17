@@ -47,19 +47,27 @@ def run_full_fraud_pipeline():
     eda_explorer.run_full_eda()
 
     # ----------------------------------------------------
-    # Module 2: Data Preprocessing
+    # Module 2: Data Preprocessing  (60 / 20 / 20 split)
     # ----------------------------------------------------
     print("\n>>> [STEP 2/10] Building Production Preprocessing Pipeline...")
     raw_df = pd.read_csv("creditcard.csv")
     preprocessor = FraudDataPreprocessor(models_dir="models")
-    
+
     clean_df = preprocessor.clean_raw_data(raw_df, drop_duplicates=True)
-    X_train, X_test, y_train, y_test = preprocessor.prepare_train_test_split(clean_df, test_size=0.2)
-    
-    # Fit & transform with Winsorization & Scalers
+
+    # Three-way stratified split: train(60%) / val(20%) / test(20%)
+    # - train : model fitting
+    # - val   : threshold tuning & model selection (never touches test data)
+    # - test  : final held-out evaluation only
+    X_train, X_val, X_test, y_train, y_val, y_test = preprocessor.prepare_train_val_test_split(
+        clean_df, val_size=0.2, test_size=0.2
+    )
+
+    # Fit scalers/winsorizer on training split only, then apply to all three
     preprocessor.fit(X_train)
     X_train_clean = preprocessor.transform(X_train)
-    X_test_clean = preprocessor.transform(X_test)
+    X_val_clean   = preprocessor.transform(X_val)
+    X_test_clean  = preprocessor.transform(X_test)
     preprocessor.save_pipeline()
 
     # ----------------------------------------------------
@@ -68,7 +76,8 @@ def run_full_fraud_pipeline():
     print("\n>>> [STEP 3/10] Engineering Advanced Behavioral & Temporal Features...")
     feature_engineer = FraudFeatureEngineer(models_dir="models")
     X_train_feat = feature_engineer.fit_transform(X_train_clean)
-    X_test_feat = feature_engineer.transform(X_test_clean)
+    X_val_feat   = feature_engineer.transform(X_val_clean)
+    X_test_feat  = feature_engineer.transform(X_test_clean)
     feature_engineer.save()
     print(f"Total Feature Count after Engineering: {X_train_feat.shape[1]}")
 
@@ -84,7 +93,12 @@ def run_full_fraud_pipeline():
     # ----------------------------------------------------
     print("\n>>> [STEP 5/10] Training & Benchmarking Classification Models...")
     trainer = FraudModelTrainer(models_dir="models")
-    benchmark_df = trainer.train_and_benchmark(X_train_feat, y_train, X_test_feat, y_test)
+    # Pass X_val/y_val so threshold is tuned on validation data, not test data
+    benchmark_df = trainer.train_and_benchmark(
+        X_train_feat, y_train,
+        X_test_feat,  y_test,
+        X_val=X_val_feat, y_val=y_val
+    )
     trainer.save_best_model()
 
     # ----------------------------------------------------
@@ -96,7 +110,8 @@ def run_full_fraud_pipeline():
         trainer.best_model,
         trainer.best_model_name,
         X_test_feat,
-        y_test
+        y_test,
+        threshold=trainer.best_threshold   # validation-tuned threshold, not re-tuned on test
     )
 
     # ----------------------------------------------------
