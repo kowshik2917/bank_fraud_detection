@@ -1,0 +1,30 @@
+{
+  "total_rows": 284807,
+  "total_columns": 31,
+  "memory_mb": 67.36,
+  "integrity": {
+    "total_null_cells": 0,
+    "duplicate_records": 1081,
+    "duplicate_percentage": 0.38,
+    "dtypes_distribution": {
+      "float64": 30,
+      "int64": 1
+    }
+  },
+  "class_distribution": {
+    "legitimate_count": 284315,
+    "fraud_count": 492,
+    "fraud_percentage": 0.1727,
+    "imbalance_ratio": "577.9 : 1"
+  },
+  "amount_statistics": {
+    "legit_mean": 88.29,
+    "legit_median": 22.0,
+    "legit_max": 25691.16,
+    "legit_p95": 364.41,
+    "fraud_mean": 122.21,
+    "fraud_median": 9.25,
+    "fraud_max": 2125.87,
+    "fraud_p95": 640.9
+  }
+}

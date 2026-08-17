@@ -1,0 +1,169 @@
+{
+  "build_timestamp": "2026-08-16T15:29:15.809391",
+  "total_training_samples": 226980,
+  "total_test_samples": 56746,
+  "feature_names": [
+    "Time",
+    "V1",
+    "V2",
+    "V3",
+    "V4",
+    "V5",
+    "V6",
+    "V7",
+    "V8",
+    "V9",
+    "V10",
+    "V11",
+    "V12",
+    "V13",
+    "V14",
+    "V15",
+    "V16",
+    "V17",
+    "V18",
+    "V19",
+    "V20",
+    "V21",
+    "V22",
+    "V23",
+    "V24",
+    "V25",
+    "V26",
+    "V27",
+    "V28",
+    "Amount",
+    "Scaled_Amount",
+    "Scaled_Time",
+    "Hour",
+    "Sin_Hour",
+    "Cos_Hour",
+    "Is_Night_Transaction",
+    "Amount_Log",
+    "Amount_Deviation_Z",
+    "Amount_Tier",
+    "V_Extreme_Count",
+    "Risk_Indicator_Index",
+    "Velocity_Proxy"
+  ],
+  "best_model_name": "XGBoost",
+  "benchmark_summary": [
+    {
+      "Model": "XGBoost",
+      "Precision": 0.9125,
+      "Recall": 0.7684,
+      "F1_Score": 0.8343,
+      "ROC_AUC": 0.9696,
+      "PR_AUC": 0.8103,
+      "Train_Time_s": 5.6
+    },
+    {
+      "Model": "CatBoost",
+      "Precision": 0.8085,
+      "Recall": 0.8,
+      "F1_Score": 0.8042,
+      "ROC_AUC": 0.9684,
+      "PR_AUC": 0.8046,
+      "Train_Time_s": 21.19
+    },
+    {
+      "Model": "Random_Forest",
+      "Precision": 0.875,
+      "Recall": 0.7368,
+      "F1_Score": 0.8,
+      "ROC_AUC": 0.9582,
+      "PR_AUC": 0.7941,
+      "Train_Time_s": 23.94
+    },
+    {
+      "Model": "Logistic_Regression",
+      "Precision": 0.0539,
+      "Recall": 0.8737,
+      "F1_Score": 0.1016,
+      "ROC_AUC": 0.9695,
+      "PR_AUC": 0.6588,
+      "Train_Time_s": 37.22
+    }
+  ],
+  "evaluation_summary": {
+    "model_name": "XGBoost",
+    "confusion_matrix": {
+      "true_negatives": 56644,
+      "false_positives": 7,
+      "false_negatives": 22,
+      "true_positives": 73
+    },
+    "metrics_at_0_5": {
+      "precision": 0.9125,
+      "recall": 0.7684,
+      "f1_score": 0.8343,
+      "accuracy": 0.9995
+    },
+    "optimal_threshold_tuning": {
+      "optimal_threshold": 0.7189,
+      "max_f1_score": 0.8488,
+      "precision_at_optimal": 0.9481,
+      "recall_at_optimal": 0.7684
+    },
+    "area_under_curves": {
+      "PR_AUC": 0.8103,
+      "ROC_AUC": 0.9696
+    }
+  },
+  "imbalance_comparison": {
+    "baseline": {
+      "negative_samples (0)": 226602,
+      "positive_samples (1)": 378,
+      "total_samples": 226980,
+      "fraud_prevalence_pct": 0.1665,
+      "imbalance_ratio": "599.5 : 1"
+    },
+    "smote": {
+      "negative_samples (0)": 226602,
+      "positive_samples (1)": 11330,
+      "total_samples": 237932,
+      "fraud_prevalence_pct": 4.7619,
+      "imbalance_ratio": "20.0 : 1"
+    },
+    "adasyn": {
+      "negative_samples (0)": 226602,
+      "positive_samples (1)": 11291,
+      "total_samples": 237893,
+      "fraud_prevalence_pct": 4.7463,
+      "imbalance_ratio": "20.1 : 1"
+    },
+    "recommendation": "In high-throughput financial fraud systems, standard 50:50 oversampling creates artificial clusters that spike False Positive Rates in live inference. The recommended approach is either mild SMOTE (5-10% ratio) or algorithmic cost-sensitive weighting (scale_pos_weight in XGBoost), which preserves authentic feature distributions and maximizes Precision-Recall AUC."
+  },
+  "eda_summary": {
+    "total_rows": 284807,
+    "total_columns": 31,
+    "memory_mb": 67.36,
+    "integrity": {
+      "total_null_cells": 0,
+      "duplicate_records": 1081,
+      "duplicate_percentage": 0.38,
+      "dtypes_distribution": {
+        "float64": 30,
+        "int64": 1
+      }
+    },
+    "class_distribution": {
+      "legitimate_count": 284315,
+      "fraud_count": 492,
+      "fraud_percentage": 0.1727,
+      "imbalance_ratio": "577.9 : 1"
+    },
+    "amount_statistics": {
+      "legit_mean": 88.29,
+      "legit_median": 22.0,
+      "legit_max": 25691.16,
+      "legit_p95": 364.41,
+      "fraud_mean": 122.21,
+      "fraud_median": 9.25,
+      "fraud_max": 2125.87,
+      "fraud_p95": 640.9
+    }
+  },
+  "sample_pdf_report": "reports_output\\FRAUD_DOSSIER_CASE-2026-INIT.pdf",
+  "pipeline_status": "READY"
+}
