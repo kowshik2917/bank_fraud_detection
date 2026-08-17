@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Search, Filter, RefreshCw, FileText, ChevronRight, Eye, Sparkles } from 'lucide-react';
-import { getTransactions, generateReport, getDownloadUrl } from '../services/api';
+import { getTransactions, generateReport, getDownloadUrl, logSearch } from '../services/api';
 import RiskBadge from '../components/RiskBadge';
 
 export const TransactionExplorer = ({ onOpenSimulator }) => {
@@ -36,6 +36,11 @@ export const TransactionExplorer = ({ onOpenSimulator }) => {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
+    // Log search to MongoDB
+    const analyst = (() => { try { return JSON.parse(localStorage.getItem('sentinel_analyst')); } catch { return null; } })();
+    if (analyst && search.trim()) {
+      logSearch({ analyst_email: analyst.email, query: search.trim() });
+    }
     fetchTxns();
   };
 

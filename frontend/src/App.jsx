@@ -9,14 +9,18 @@ import FraudAnalytics from './pages/FraudAnalytics';
 import ShapExplainability from './pages/ShapExplainability';
 import AlertsCenter from './pages/AlertsCenter';
 import ReportsPage from './pages/ReportsPage';
+import LoginScreen from './components/LoginScreen';
 
 
 export const App = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
   const [activeAlertsCount, setActiveAlertsCount] = useState(0);
+  const [analyst, setAnalyst] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('sentinel_analyst')); } catch { return null; }
+  });
 
-  // Fetch real-time alerts count on mount and refresh every 30 seconds
+  // Fetch real-time alerts count on mount and whenever analyst changes
   useEffect(() => {
     const fetchAlertsCount = async () => {
       try {
@@ -26,11 +30,15 @@ export const App = () => {
         console.error('Failed to fetch alerts count', e);
       }
     };
-    fetchAlertsCount();
+    if (analyst) {
+      fetchAlertsCount();
+    }
     const interval = setInterval(fetchAlertsCount, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [analyst]);
 
+
+  if (!analyst) return <LoginScreen onLogin={(profile) => { localStorage.setItem('sentinel_analyst', JSON.stringify(profile)); setAnalyst(profile); }} />;
 
   return (
     <div className="min-h-screen bg-[#0a0f1d] text-slate-100 flex flex-col font-sans">
@@ -38,6 +46,8 @@ export const App = () => {
       <Navbar
         onOpenSimulator={() => setIsSimulatorOpen(true)}
         activeAlertsCount={activeAlertsCount}
+        analyst={analyst}
+        onLogout={() => { localStorage.removeItem('sentinel_analyst'); setAnalyst(null); }}
       />
 
       {/* Main Layout Body */}
@@ -53,6 +63,7 @@ export const App = () => {
         <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full overflow-y-auto">
           {activeTab === 'overview' && (
             <DashboardOverview
+              key={analyst?.email}
               onOpenSimulator={() => setIsSimulatorOpen(true)}
               onSelectAlert={() => setActiveTab('alerts')}
             />
@@ -60,17 +71,28 @@ export const App = () => {
 
           {activeTab === 'explorer' && (
             <TransactionExplorer
+              key={analyst?.email}
               onOpenSimulator={() => setIsSimulatorOpen(true)}
             />
           )}
 
-          {activeTab === 'analytics' && <FraudAnalytics />}
+          {activeTab === 'analytics' && <FraudAnalytics key={analyst?.email} />}
 
-          {activeTab === 'shap' && <ShapExplainability />}
+          {activeTab === 'shap' && <ShapExplainability key={analyst?.email} />}
 
-          {activeTab === 'alerts' && <AlertsCenter />}
+          {activeTab === 'alerts' && (
+            <AlertsCenter
+              key={analyst?.email}
+              onAlertStatusChanged={(previousStatus, nextStatus) => {
+                const wasActive = ['OPEN', 'INVESTIGATING'].includes(previousStatus);
+                const isActive = ['OPEN', 'INVESTIGATING'].includes(nextStatus);
+                if (wasActive && !isActive) setActiveAlertsCount((count) => Math.max(0, count - 1));
+                if (!wasActive && isActive) setActiveAlertsCount((count) => count + 1);
+              }}
+            />
+          )}
 
-          {activeTab === 'reports' && <ReportsPage />}
+          {activeTab === 'reports' && <ReportsPage key={analyst?.email} />}
         </main>
       </div>
 
@@ -78,8 +100,8 @@ export const App = () => {
       <TransactionSimulatorModal
         isOpen={isSimulatorOpen}
         onClose={() => setIsSimulatorOpen(false)}
-        onTransactionCreated={() => {
-          setActiveAlertsCount((prev) => prev + 1);
+        onTransactionCreated={(response) => {
+          if (response.final_risk_score >= 60) setActiveAlertsCount((prev) => prev + 1);
         }}
       />
     </div>

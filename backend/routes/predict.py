@@ -8,7 +8,8 @@ import uuid
 import numpy as np
 import pandas as pd
 from datetime import datetime
-from fastapi import APIRouter, HTTPException
+from typing import Optional
+from fastapi import APIRouter, HTTPException, Header
 
 from backend.models_schemas import TransactionInput, PredictionResponse, BatchPredictionRequest
 from backend.database import db_instance
@@ -46,156 +47,158 @@ def get_pipeline_components():
 
 
 @router.post("/predict", response_model=PredictionResponse)
-def predict_transaction(txn: TransactionInput):
+def predict_transaction(txn: TransactionInput, x_user_email: Optional[str] = Header(None, alias="X-User-Email")):
     """
     Score a live banking transaction with multi-factor risk calibration and SHAP explainability.
     """
-    pre, fe, model_bundle, shap_exp, anomaly_eng = get_pipeline_components()
+    try:
+        pre, fe, model_bundle, shap_exp, anomaly_eng = get_pipeline_components()
 
-    txn_dict = txn.dict()
-    txn_id = txn.transaction_id or f"TXN-{uuid.uuid4().hex[:8].upper()}"
-    raw_amount = float(txn.Amount)
-    raw_time = float(txn.Time)
+        txn_dict = txn.dict()
+        raw_txn_id = txn.transaction_id
+        if not raw_txn_id or raw_txn_id.startswith("TXN-SIM-"):
+            txn_id = f"TXN-{uuid.uuid4().hex[:8].upper()}"
+        else:
+            txn_id = raw_txn_id
+        raw_amount = float(txn.Amount)
+        raw_time = float(txn.Time)
 
-    # Convert to DataFrame
-    df_raw = pd.DataFrame([txn_dict])
-    # Drop non-feature fields if present
-    cols_to_drop = [c for c in ['transaction_id', 'cardholder_id', 'merchant_name', 'Class'] if c in df_raw.columns]
-    df_clean = df_raw.drop(columns=cols_to_drop)
+        # Convert to DataFrame
+        df_raw = pd.DataFrame([txn_dict])
+        cols_to_drop = [c for c in ['transaction_id', 'cardholder_id', 'merchant_name', 'Class'] if c in df_raw.columns]
+        df_clean = df_raw.drop(columns=cols_to_drop)
 
-    # 1. Fallback heuristic scoring if pipeline artifacts are still being fitted
-    if pre is None or fe is None or model_bundle is None:
-        # Heuristic fallback based on dominant PCA features
-        v14_val = float(txn.V14)
-        v12_val = float(txn.V12)
-        v10_val = float(txn.V10)
-        v17_val = float(txn.V17)
-        # Empirical negative correlation
-        latent_risk = max(0.0, (-1.5 * v14_val - 1.2 * v12_val - 1.0 * v10_val - 1.0 * v17_val))
-        prob = min(0.99, max(0.01, 1.0 / (1.0 + np.exp(-(latent_risk - 4.0)))))
-        anomaly_score = min(100.0, max(0.0, latent_risk * 10.0))
-        risk_result = _risk_engine.calculate_risk_score(
-            fraud_probability=prob,
-            anomaly_score=anomaly_score,
-            transaction_amount=raw_amount,
-            is_night=((raw_time / 3600.0) % 24.0 < 6.0),
-            extreme_feature_count=int(abs(v14_val) > 3) + int(abs(v12_val) > 3)
-        )
-        shap_res = {
-            "reason_codes": [f"Latent component V14 deviation ({v14_val:.2f})", f"Amount deviation (${raw_amount:.2f})"],
-            "top_risk_drivers": [{"feature": "V14", "shap_value": 0.42, "raw_value": v14_val, "direction": "FRAUD_RISK_INCREASE"}],
-            "top_protective_factors": [{"feature": "V1", "shap_value": -0.12, "raw_value": float(txn.V1), "direction": "FRAUD_RISK_DECREASE"}]
-        }
-    else:
-        # Full Production ML Pipeline Execution
-        try:
-            # Reorder raw features to standard order
-            expected_raw = ['Time'] + [f'V{i}' for i in range(1, 29)] + ['Amount']
-            raw_ordered = [c for c in expected_raw if c in df_clean.columns]
-            df_clean = df_clean[raw_ordered]
-
-            df_pre = pre.transform(df_clean)
-            df_feat = fe.transform(df_pre)
-            
-            # Align exact feature column order expected by model
-            model_name, model, _ = model_bundle
-            if hasattr(model, "feature_names_in_"):
-                df_feat = df_feat[model.feature_names_in_]
-            
-            # Predict Supervised Probability
-            if hasattr(model, "predict_proba"):
-                prob = float(model.predict_proba(df_feat)[0, 1])
-            else:
-                prob = float(model.predict(df_feat)[0])
-
-            # Predict Unsupervised Anomaly Score
-            if anomaly_eng:
-                ano_res = anomaly_eng.score_transaction(df_feat)
-                anomaly_score = ano_res["combined_anomaly_score"]
-                is_anomaly = ano_res["is_anomaly"]
-            else:
-                anomaly_score = 15.0
-                is_anomaly = False
-
-            # Risk Engine Calibration
-            extreme_cnt = int(df_feat['V_Extreme_Count'].iloc[0]) if 'V_Extreme_Count' in df_feat.columns else 0
-            is_night = bool(df_feat['Is_Night_Transaction'].iloc[0] == 1) if 'Is_Night_Transaction' in df_feat.columns else False
-            
+        # 1. Fallback heuristic scoring if pipeline artifacts are not present
+        if pre is None or fe is None or model_bundle is None:
+            v14_val = float(txn.V14)
+            v12_val = float(txn.V12)
+            v10_val = float(txn.V10)
+            v17_val = float(txn.V17)
+            latent_risk = max(0.0, (-1.5 * v14_val - 1.2 * v12_val - 1.0 * v10_val - 1.0 * v17_val))
+            prob = min(0.99, max(0.01, 1.0 / (1.0 + np.exp(-(latent_risk - 4.0)))))
+            anomaly_score = min(100.0, max(0.0, latent_risk * 10.0))
             risk_result = _risk_engine.calculate_risk_score(
                 fraud_probability=prob,
                 anomaly_score=anomaly_score,
                 transaction_amount=raw_amount,
-                is_night=is_night,
-                extreme_feature_count=extreme_cnt
+                is_night=((raw_time / 3600.0) % 24.0 < 6.0),
+                extreme_feature_count=int(abs(v14_val) > 3) + int(abs(v12_val) > 3)
             )
+            shap_res = {
+                "reason_codes": [f"Latent component V14 deviation ({v14_val:.2f})", f"Amount deviation (${raw_amount:.2f})"],
+                "top_risk_drivers": [{"feature": "V14", "shap_value": 0.42, "raw_value": v14_val, "direction": "FRAUD_RISK_INCREASE"}],
+                "top_protective_factors": [{"feature": "V1", "shap_value": -0.12, "raw_value": float(txn.V1), "direction": "FRAUD_RISK_DECREASE"}]
+            }
+        else:
+            # Full Production ML Pipeline Execution
+            try:
+                expected_raw = ['Time'] + [f'V{i}' for i in range(1, 29)] + ['Amount']
+                raw_ordered = [c for c in expected_raw if c in df_clean.columns]
+                df_clean = df_clean[raw_ordered]
 
-            # SHAP Attribution & Reason Codes
-            if shap_exp:
-                shap_res = shap_exp.explain_transaction(df_feat.iloc[0], top_k=5)
-            else:
+                df_pre = pre.transform(df_clean)
+                df_feat = fe.transform(df_pre)
+
+                model_name, model, _ = model_bundle
+                if hasattr(model, "feature_names_in_"):
+                    df_feat = df_feat[model.feature_names_in_]
+
+                if hasattr(model, "predict_proba"):
+                    prob = float(model.predict_proba(df_feat)[0, 1])
+                else:
+                    prob = float(model.predict(df_feat)[0])
+
+                if anomaly_eng:
+                    ano_res = anomaly_eng.score_transaction(df_feat)
+                    anomaly_score = ano_res["combined_anomaly_score"]
+                    is_anomaly = ano_res["is_anomaly"]
+                else:
+                    anomaly_score = 15.0
+                    is_anomaly = False
+
+                extreme_cnt = int(df_feat['V_Extreme_Count'].iloc[0]) if 'V_Extreme_Count' in df_feat.columns else 0
+                is_night = bool(df_feat['Is_Night_Transaction'].iloc[0] == 1) if 'Is_Night_Transaction' in df_feat.columns else False
+
+                risk_result = _risk_engine.calculate_risk_score(
+                    fraud_probability=prob,
+                    anomaly_score=anomaly_score,
+                    transaction_amount=raw_amount,
+                    is_night=is_night,
+                    extreme_feature_count=extreme_cnt
+                )
+
+                if shap_exp:
+                    shap_res = shap_exp.explain_transaction(df_feat.iloc[0], top_k=5)
+                else:
+                    shap_res = {"reason_codes": [], "top_risk_drivers": [], "top_protective_factors": []}
+
+            except Exception as e:
+                print(f"[Inference Error] {e}. Using resilient fallback calculation.")
+                prob = 0.05
+                anomaly_score = 10.0
+                is_anomaly = False
+                risk_result = _risk_engine.calculate_risk_score(prob, anomaly_score, raw_amount)
                 shap_res = {"reason_codes": [], "top_risk_drivers": [], "top_protective_factors": []}
 
-        except Exception as e:
-            print(f"[Inference Error] {e}. Using resilient fallback calculation.")
-            prob = 0.05
-            anomaly_score = 10.0
-            is_anomaly = False
-            risk_result = _risk_engine.calculate_risk_score(prob, anomaly_score, raw_amount)
-            shap_res = {"reason_codes": [], "top_risk_drivers": [], "top_protective_factors": []}
+        timestamp_now = datetime.utcnow().isoformat()
 
-    timestamp_now = datetime.utcnow().isoformat()
-
-    # Record transaction to DB
-    txn_record = {
-        "transaction_id": txn_id,
-        "cardholder_id": txn.cardholder_id,
-        "merchant_name": txn.merchant_name,
-        "amount": raw_amount,
-        "time": raw_time,
-        "fraud_probability": round(prob, 4),
-        "anomaly_score": round(anomaly_score, 2),
-        "final_risk_score": risk_result["final_risk_score"],
-        "risk_level": risk_result["risk_level"],
-        "action": risk_result["recommended_action"],
-        "timestamp": timestamp_now,
-        "features": {k: float(v) for k, v in txn_dict.items() if k.startswith('V')}
-    }
-    db_instance.insert_transaction(txn_record)
-
-    # If High or Critical Risk, trigger an Alert
-    if risk_result["final_risk_score"] >= 60.0:
-        alert_record = {
+        # Record transaction to DB
+        txn_record = {
             "transaction_id": txn_id,
             "cardholder_id": txn.cardholder_id,
+            "merchant_name": txn.merchant_name,
             "amount": raw_amount,
+            "time": raw_time,
             "fraud_probability": round(prob, 4),
-            "risk_score": risk_result["final_risk_score"],
+            "anomaly_score": round(anomaly_score, 2),
+            "final_risk_score": risk_result["final_risk_score"],
             "risk_level": risk_result["risk_level"],
-            "status": "OPEN",
-            "triggered_rules": risk_result["triggered_rules"],
-            "reason_codes": shap_res.get("reason_codes", []),
-            "created_at": timestamp_now
+            "action": risk_result["recommended_action"],
+            "timestamp": timestamp_now,
+            "user_email": x_user_email or "default",
+            "features": {k: float(v) for k, v in txn_dict.items() if k.startswith('V')}
         }
-        db_instance.insert_alert(alert_record)
+        db_instance.insert_transaction(txn_record, user_email=x_user_email)
 
-    return PredictionResponse(
-        transaction_id=txn_id,
-        fraud_probability=round(prob, 4),
-        is_fraud_predicted=bool(prob >= 0.5),
-        final_risk_score=risk_result["final_risk_score"],
-        risk_level=risk_result["risk_level"],
-        color=risk_result["color"],
-        recommended_action=risk_result["recommended_action"],
-        action_description=risk_result["action_description"],
-        anomaly_score=round(anomaly_score, 2),
-        is_anomaly=bool(anomaly_score > 60.0),
-        score_breakdown=risk_result["score_breakdown"],
-        triggered_rules=risk_result["triggered_rules"],
-        reason_codes=shap_res.get("reason_codes", []),
-        top_risk_drivers=shap_res.get("top_risk_drivers", []),
-        top_protective_factors=shap_res.get("top_protective_factors", []),
-        timestamp=timestamp_now
-    )
+        # If High or Critical Risk, trigger an Alert
+        if risk_result["final_risk_score"] >= 60.0:
+            alert_record = {
+                "transaction_id": txn_id,
+                "cardholder_id": txn.cardholder_id,
+                "amount": raw_amount,
+                "fraud_probability": round(prob, 4),
+                "risk_score": risk_result["final_risk_score"],
+                "risk_level": risk_result["risk_level"],
+                "status": "OPEN",
+                "triggered_rules": risk_result["triggered_rules"],
+                "reason_codes": shap_res.get("reason_codes", []),
+                "created_at": timestamp_now,
+                "user_email": x_user_email or "default"
+            }
+            db_instance.insert_alert(alert_record, user_email=x_user_email)
+
+        return PredictionResponse(
+            transaction_id=txn_id,
+            fraud_probability=round(prob, 4),
+            is_fraud_predicted=bool(prob >= 0.5),
+            final_risk_score=risk_result["final_risk_score"],
+            risk_level=risk_result["risk_level"],
+            color=risk_result["color"],
+            recommended_action=risk_result["recommended_action"],
+            action_description=risk_result["action_description"],
+            anomaly_score=round(anomaly_score, 2),
+            is_anomaly=bool(anomaly_score > 60.0),
+            score_breakdown=risk_result["score_breakdown"],
+            triggered_rules=risk_result["triggered_rules"],
+            reason_codes=shap_res.get("reason_codes", []),
+            top_risk_drivers=shap_res.get("top_risk_drivers", []),
+            top_protective_factors=shap_res.get("top_protective_factors", []),
+            timestamp=timestamp_now
+        )
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Inference error: {str(exc)}")
 
 
 @router.post("/batch-predict")

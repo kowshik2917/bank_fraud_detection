@@ -7,7 +7,7 @@ import os
 import uuid
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
 from fastapi.responses import FileResponse
 
 from backend.models_schemas import ReportGenerationRequest
@@ -19,7 +19,7 @@ _pdf_generator = FraudReportGenerator(output_dir="reports_output")
 
 
 @router.post("/report")
-def generate_report(payload: ReportGenerationRequest):
+def generate_report(payload: ReportGenerationRequest, x_user_email: Optional[str] = Header(None, alias="X-User-Email")):
     """
     Generate an official, audit-ready PDF forensic investigation dossier for a transaction.
     """
@@ -76,9 +76,10 @@ def generate_report(payload: ReportGenerationRequest):
         "file_name": os.path.basename(pdf_filepath),
         "file_path": pdf_filepath,
         "download_url": f"/api/v1/reports/{case_id}/download",
-        "created_at": datetime.utcnow().isoformat()
+        "created_at": datetime.utcnow().isoformat(),
+        "user_email": x_user_email or "default"
     }
-    db_instance.save_report_record(report_record)
+    db_instance.save_report_record(report_record, user_email=x_user_email)
 
     return {
         "message": "Forensic PDF Dossier generated successfully",
@@ -89,9 +90,13 @@ def generate_report(payload: ReportGenerationRequest):
 
 
 @router.get("/reports")
-def list_reports(limit: int = 50):
-    """List all generated forensic investigation reports."""
-    reports = db_instance.get_reports(limit=limit)
+def list_reports(limit: int = 50, x_user_email: Optional[str] = Header(None, alias="X-User-Email")):
+    """List all generated forensic investigation reports for the current user's workspace."""
+    reports = db_instance.get_reports(limit=limit, user_email=x_user_email)
+    return {
+        "count": len(reports),
+        "reports": reports
+    }
     return {
         "count": len(reports),
         "reports": reports

@@ -77,6 +77,12 @@ export const FraudAnalytics = () => {
         </p>
       </div>
 
+      {/* Sections - collapsible */}
+      <details open className="mt-4 rounded-lg bg-slate-900/80 border border-slate-800 p-4">
+        <summary className="text-sm font-medium text-white cursor-pointer">Model Benchmark Leaderboard</summary>
+        <div className="mt-3">
+
+
       {/* Model Benchmark Leaderboard */}
       <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800">
         <div className="flex items-center gap-2 mb-4">
@@ -128,9 +134,14 @@ export const FraudAnalytics = () => {
             </tbody>
           </table>
         </div>
-      </div>
+        </div>
+        </div>
+      </details>
 
-      {/* Curves Grid */}
+      <details open className="mt-4 rounded-lg bg-slate-900/80 border border-slate-800 p-4">
+        <summary className="text-sm font-medium text-white cursor-pointer">Precision‑Recall & ROC Curves</summary>
+        <div className="mt-3">
+        {/* Curves Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Precision-Recall Curve */}
         <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800">
@@ -169,9 +180,14 @@ export const FraudAnalytics = () => {
             </ResponsiveContainer>
           </div>
         </div>
-      </div>
+        </div>
+        </div>
+      </details>
 
-      {/* Feature Importance Bar Chart */}
+      <details open className="mt-4 rounded-lg bg-slate-900/80 border border-slate-800 p-4">
+        <summary className="text-sm font-medium text-white cursor-pointer">Top Predictive Features</summary>
+        <div className="mt-3">
+        {/* Feature Importance Bar Chart */}
       <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800">
         <div className="mb-4">
           <h3 className="text-sm font-bold text-white">Top 9 Predictive Features (MDI / Gain Importance)</h3>
@@ -216,7 +232,9 @@ export const FraudAnalytics = () => {
             </p>
           </div>
         </div>
-      </div>
+        </div>
+        </div>
+      </details>
     </div>
   );
 };

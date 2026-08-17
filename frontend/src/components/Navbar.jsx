@@ -1,7 +1,9 @@
 import React from 'react';
-import { Shield, Bell, Activity, Search, Sparkles } from 'lucide-react';
+import { Shield, Bell, Sparkles, LogOut, UserRound } from 'lucide-react';
+import { useState } from 'react';
 
-export const Navbar = ({ onOpenSimulator, activeAlertsCount = 0 }) => {
+export const Navbar = ({ onOpenSimulator, activeAlertsCount = 0, analyst, onLogout }) => {
+  const [profileOpen, setProfileOpen] = useState(false);
   return (
     <header className="h-16 border-b border-slate-800/80 bg-[#0a0f1d]/90 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-30">
       {/* Brand */}
@@ -48,14 +50,20 @@ export const Navbar = ({ onOpenSimulator, activeAlertsCount = 0 }) => {
         </div>
 
         {/* User Badge */}
-        <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-slate-700 to-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-200">
-            FA
-          </div>
-          <div className="hidden lg:block text-left">
-            <div className="text-xs font-semibold text-slate-200">Lead Analyst #8142</div>
-            <div className="text-[10px] text-slate-400">Risk Operations</div>
-          </div>
+        <div className="relative flex items-center gap-2 pl-2 border-l border-slate-800">
+          <button onClick={() => setProfileOpen((open) => !open)} className="flex items-center gap-2 text-left">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 border border-blue-400/40 flex items-center justify-center text-xs font-bold text-white">
+              {analyst?.initials || 'FA'}
+            </div>
+            <div className="hidden lg:block">
+              <div className="text-xs font-semibold text-slate-200">{analyst?.name || 'Fraud Analyst'}</div>
+              <div className="text-[10px] text-slate-400">Risk Operations</div>
+            </div>
+          </button>
+          {profileOpen && <div className="absolute right-0 top-11 w-56 rounded-xl border border-slate-700 bg-slate-900 p-3 shadow-xl">
+            <div className="flex items-center gap-2 border-b border-slate-800 pb-3"><UserRound className="w-4 h-4 text-blue-400" /><div><p className="text-xs font-semibold">{analyst?.name}</p><p className="text-[10px] text-slate-400">{analyst?.email}</p></div></div>
+            <button onClick={onLogout} className="mt-3 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-red-300 hover:bg-red-950/40"><LogOut className="w-3.5 h-3.5" />Sign out</button>
+          </div>}
         </div>
       </div>
     </header>

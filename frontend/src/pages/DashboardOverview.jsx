@@ -56,7 +56,7 @@ export const DashboardOverview = ({ onOpenSimulator, onSelectAlert }) => {
   }
 
   // Format Risk Distribution for Donut Chart
-  const riskDist = stats?.risk_distribution || { LOW: 281350, MEDIUM: 2965, HIGH: 360, CRITICAL: 132 };
+  const riskDist = stats?.risk_distribution || { LOW: 0, MEDIUM: 0, HIGH: 0, CRITICAL: 0 };
   const pieData = [
     { name: 'Low Risk', value: riskDist.LOW, color: '#10b981' },
     { name: 'Medium Risk', value: riskDist.MEDIUM, color: '#eab308' },
@@ -66,6 +66,29 @@ export const DashboardOverview = ({ onOpenSimulator, onSelectAlert }) => {
 
   return (
     <div className="space-y-6">
+      {/* New User Workspace Welcome Banner */}
+      {stats?.total_transactions_scanned === 0 && (
+        <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-900/30 to-indigo-900/20 border border-blue-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center shrink-0">
+              <Sparkles className="w-5 h-5 text-blue-400" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-white">Welcome to your Personal Fraud Intelligence Workspace!</h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                This workspace is dedicated to your analyst account. Run your first simulation to start generating live threat metrics and alert feeds.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onOpenSimulator}
+            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-lg shadow-blue-600/30 transition shrink-0"
+          >
+            Launch First Simulation →
+          </button>
+        </div>
+      )}
+
       {/* Top Banner */}
       <div className="p-6 rounded-2xl bg-gradient-to-r from-blue-950/40 via-slate-900 to-slate-900 border border-blue-900/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
@@ -101,25 +124,25 @@ export const DashboardOverview = ({ onOpenSimulator, onSelectAlert }) => {
             <Activity className="w-4 h-4 text-blue-400" />
           </div>
           <div className="text-2xl font-bold text-white tracking-tight">
-            {stats?.total_transactions_scanned?.toLocaleString() || '284,807'}
+            {(stats?.total_transactions_scanned ?? 0).toLocaleString()}
           </div>
           <div className="flex items-center gap-1 mt-1 text-[11px] text-emerald-400">
             <TrendingUp className="w-3 h-3" />
-            <span>99.98% processing uptime</span>
+            <span>Live scored-transaction count</span>
           </div>
         </div>
 
         {/* Fraud Prevented ($) */}
         <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800">
           <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-medium">Fraud Prevented (USD)</span>
+            <span className="text-xs font-medium">High-Risk Amount Held (USD)</span>
             <DollarSign className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="text-2xl font-bold text-emerald-400 tracking-tight">
-            ${stats?.total_fraud_prevented_usd?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '60,127.85'}
+            ${(stats?.total_fraud_prevented_usd ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-400">
-            <span>{stats?.total_fraud_detected || 492} confirmed fraud vectors blocked</span>
+            <span>{stats?.total_fraud_detected ?? 0} high-risk transactions detected</span>
           </div>
         </div>
 
@@ -130,7 +153,7 @@ export const DashboardOverview = ({ onOpenSimulator, onSelectAlert }) => {
             <ShieldAlert className="w-4 h-4 text-orange-400" />
           </div>
           <div className="text-2xl font-bold text-white tracking-tight">
-            {stats?.total_active_alerts || 14}
+            {stats?.total_active_alerts ?? 0}
           </div>
           <div className="flex items-center gap-1 mt-1 text-[11px] text-orange-400">
             <span>Requires analyst review</span>
@@ -144,10 +167,10 @@ export const DashboardOverview = ({ onOpenSimulator, onSelectAlert }) => {
             <AlertOctagon className="w-4 h-4 text-purple-400" />
           </div>
           <div className="text-2xl font-bold text-white tracking-tight">
-            {stats?.fraud_rate_percentage || 0.172}%
+            {stats?.fraud_rate_percentage ?? 0}%
           </div>
           <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-400">
-            <span>Avg Risk Score: {stats?.average_risk_score || 14.8} / 100</span>
+            <span>Avg Risk Score: {stats?.average_risk_score ?? 0} / 100</span>
           </div>
         </div>
       </div>
@@ -247,9 +270,12 @@ export const DashboardOverview = ({ onOpenSimulator, onSelectAlert }) => {
             <h3 className="text-sm font-bold text-white">High Priority Threat Alerts</h3>
             <p className="text-xs text-slate-400">Recent high & critical risk flags queued for review</p>
           </div>
-          <span className="text-xs text-blue-400 font-medium cursor-pointer hover:underline">
-            View All in Alerts Center →
-          </span>
+          <button
+  onClick={onSelectAlert}
+  className="text-xs text-blue-400 font-medium cursor-pointer hover:underline focus:outline-none"
+>
+  View All in Alerts Center →
+</button>
         </div>
 
         <div className="overflow-x-auto">

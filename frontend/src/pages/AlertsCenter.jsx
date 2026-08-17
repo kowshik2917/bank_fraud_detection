@@ -14,7 +14,7 @@ import {
 import { getAlerts, updateAlertStatus, generateReport, getDownloadUrl } from '../services/api';
 import RiskBadge from '../components/RiskBadge';
 
-export const AlertsCenter = () => {
+export const AlertsCenter = ({ onAlertStatusChanged }) => {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState('ALL');
@@ -50,6 +50,7 @@ export const AlertsCenter = () => {
     if (!activeAlert) return;
     try {
       setUpdating(true);
+      const previousStatus = activeAlert.status;
       await updateAlertStatus(activeAlert.alert_id, {
         status: newStatus,
         investigator_notes: notes,
@@ -64,6 +65,7 @@ export const AlertsCenter = () => {
             : a
         )
       );
+      onAlertStatusChanged?.(previousStatus, newStatus);
     } catch (err) {
       console.error('Error updating status:', err);
     } finally {

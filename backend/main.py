@@ -19,6 +19,8 @@ from backend.routes.transactions import router as transactions_router
 from backend.routes.alerts import router as alerts_router
 from backend.routes.dashboard import router as dashboard_router
 from backend.routes.reports import router as reports_router
+from backend.routes.auth import router as auth_router
+from backend.routes.search_log import router as search_log_router
 from backend.database import db_instance
 
 app = FastAPI(
@@ -45,6 +47,8 @@ app.include_router(transactions_router)
 app.include_router(alerts_router)
 app.include_router(dashboard_router)
 app.include_router(reports_router)
+app.include_router(auth_router)
+app.include_router(search_log_router)
 
 # Mount static directories if available
 os.makedirs("reports_output", exist_ok=True)

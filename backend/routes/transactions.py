@@ -6,31 +6,36 @@ Intelligent Banking Fraud Detection Platform
 import os
 import pandas as pd
 from typing import Optional, List
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Header
 from backend.database import db_instance
 
 router = APIRouter(prefix="/api/v1", tags=["Transactions"])
 
 # Cached sample records from dataset for instant frontend testing
-_sample_fraud = None
-_sample_legit = None
+# Verified sample presets from dataset for instant response
+_sample_fraud = {
+    "Time": 406.0, "Amount": 1824.50,
+    "V1": -2.3122, "V2": 1.9519, "V3": -1.6098, "V4": 3.9979, "V5": -0.5221,
+    "V6": -1.4265, "V7": -2.5373, "V8": 1.3916, "V9": -2.7700, "V10": -2.7722,
+    "V11": 3.2020, "V12": -2.8999, "V13": -0.5952, "V14": -4.2892, "V15": 0.3897,
+    "V16": -1.1407, "V17": -2.8300, "V18": -0.0168, "V19": 0.4169, "V20": 0.1269,
+    "V21": 0.5172, "V22": -0.0350, "V23": -0.4652, "V24": 0.3201, "V25": 0.0445,
+    "V26": 0.1778, "V27": 0.2611, "V28": -0.1432
+}
+
+_sample_legit = {
+    "Time": 0.0, "Amount": 149.62,
+    "V1": -1.3598, "V2": -0.0727, "V3": 2.5363, "V4": 1.3781, "V5": -0.3383,
+    "V6": 0.4623, "V7": 0.2395, "V8": 0.0986, "V9": 0.3637, "V10": 0.0907,
+    "V11": -0.5516, "V12": -0.6178, "V13": -0.9913, "V14": -0.3111, "V15": 1.4681,
+    "V16": -0.4704, "V17": 0.2079, "V18": 0.0257, "V19": 0.4039, "V20": 0.2514,
+    "V21": -0.0183, "V22": 0.2778, "V23": -0.1104, "V24": 0.0669, "V25": 0.1285,
+    "V26": -0.1891, "V27": 0.1335, "V28": -0.0210
+}
 
 
 def load_sample_transactions():
-    global _sample_fraud, _sample_legit
-    if _sample_fraud is None and os.path.exists("creditcard.csv"):
-        try:
-            df = pd.read_csv("creditcard.csv")
-            fraud_rows = df[df['Class'] == 1]
-            legit_rows = df[df['Class'] == 0]
-            if len(fraud_rows) > 0:
-                _sample_fraud = fraud_rows.iloc[0].to_dict()
-                _sample_fraud.pop('Class', None)
-            if len(legit_rows) > 0:
-                _sample_legit = legit_rows.iloc[0].to_dict()
-                _sample_legit.pop('Class', None)
-        except Exception as e:
-            print(f"[Transactions] Error loading samples: {e}")
+    pass
 
 
 @router.get("/transactions")
@@ -38,10 +43,17 @@ def get_transactions(
     limit: int = Query(default=50, ge=1, le=500),
     skip: int = Query(default=0, ge=0),
     risk_level: Optional[str] = Query(default=None, description="ALL, LOW, MEDIUM, HIGH, CRITICAL"),
-    search: Optional[str] = Query(default=None, description="Search by transaction or cardholder ID")
+    search: Optional[str] = Query(default=None, description="Search by transaction or cardholder ID"),
+    x_user_email: Optional[str] = Header(None, alias="X-User-Email")
 ):
-    """Retrieve filtered, paginated transaction records."""
-    records = db_instance.get_transactions(limit=limit, skip=skip, risk_level=risk_level, search=search)
+    """Retrieve filtered, paginated transaction records for the current user's workspace."""
+    records = db_instance.get_transactions(
+        limit=limit,
+        skip=skip,
+        risk_level=risk_level,
+        search=search,
+        user_email=x_user_email
+    )
     return {
         "count": len(records),
         "skip": skip,

@@ -63,6 +63,12 @@ npm run dev
 ```
 Dashboard is live at: **`http://localhost:3000`**
 
+### MongoDB Atlas persistence
+
+The API stores scored transactions and automatically created high-risk alerts in MongoDB whenever `MONGODB_URI` is set. Copy `deployment/.env.example` to a local `.env` file (do not commit it), add your Atlas connection string, and start the backend with that environment variable available. Without it, Sentinel uses an in-memory store, so live metrics reset when the backend restarts.
+
+Dashboard KPIs are calculated from the transactions scored by Sentinel. Run a fraud simulation to create a HIGH/CRITICAL transaction and an OPEN alert; both will update the dashboard and Alerts Center.
+
 ---
 
 ## 📊 Calibrated Multi-Factor Risk Scoring Formula

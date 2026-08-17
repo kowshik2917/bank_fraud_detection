@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Sparkles, AlertOctagon, CheckCircle2, FileDown, ArrowRight, ShieldCheck, RefreshCw, Layers } from 'lucide-react';
 import { predictTransaction, getSampleTransaction, generateReport, getDownloadUrl } from '../services/api';
 import RiskBadge from './RiskBadge';
@@ -7,6 +7,7 @@ export const TransactionSimulatorModal = ({ isOpen, onClose, onTransactionCreate
   const [loading, setLoading] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
   const [result, setResult] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
   const [formData, setFormData] = useState({
     Amount: 149.50,
     Time: 3600.0,
@@ -20,7 +21,27 @@ export const TransactionSimulatorModal = ({ isOpen, onClose, onTransactionCreate
     V26: -0.1891, V27: 0.1335, V28: -0.0210
   });
 
+  // Always clear previous result when opening the simulator modal
+  useEffect(() => {
+    if (isOpen) {
+      setResult(null);
+      setErrorMsg('');
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const handleClose = () => {
+    setResult(null);
+    setErrorMsg('');
+    onClose();
+  };
+
+  const updateField = (key, value) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+    if (result) setResult(null);
+    if (errorMsg) setErrorMsg('');
+  };
 
   const handleLoadPreset = async (type) => {
     try {
@@ -31,6 +52,7 @@ export const TransactionSimulatorModal = ({ isOpen, onClose, onTransactionCreate
         ...sample,
       }));
       setResult(null);
+      setErrorMsg('');
     } catch (err) {
       console.error('Error loading preset:', err);
     } finally {
@@ -40,6 +62,7 @@ export const TransactionSimulatorModal = ({ isOpen, onClose, onTransactionCreate
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setErrorMsg('');
     try {
       setLoading(true);
       const response = await predictTransaction(formData);
@@ -49,6 +72,7 @@ export const TransactionSimulatorModal = ({ isOpen, onClose, onTransactionCreate
       }
     } catch (err) {
       console.error('Prediction failed:', err);
+      setErrorMsg(err?.response?.data?.detail || 'Scoring failed. Please check the backend connection.');
     } finally {
       setLoading(false);
     }
@@ -107,7 +131,7 @@ export const TransactionSimulatorModal = ({ isOpen, onClose, onTransactionCreate
               Preset: High Fraud Risk
             </button>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
             >
               <X className="w-5 h-5" />
@@ -128,9 +152,7 @@ export const TransactionSimulatorModal = ({ isOpen, onClose, onTransactionCreate
                   type="number"
                   step="0.01"
                   value={formData.Amount}
-                  onChange={(e) =>
-                    setFormData({ ...formData, Amount: parseFloat(e.target.value) || 0 })
-                  }
+                  onChange={(e) => updateField('Amount', parseFloat(e.target.value) || 0)}
                   className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono text-sm focus:border-blue-500 focus:outline-none"
                   required
                 />
@@ -143,9 +165,7 @@ export const TransactionSimulatorModal = ({ isOpen, onClose, onTransactionCreate
                 <input
                   type="number"
                   value={formData.Time}
-                  onChange={(e) =>
-                    setFormData({ ...formData, Time: parseFloat(e.target.value) || 0 })
-                  }
+                  onChange={(e) => updateField('Time', parseFloat(e.target.value) || 0)}
                   className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono text-sm focus:border-blue-500 focus:outline-none"
                   required
                 />
@@ -158,9 +178,7 @@ export const TransactionSimulatorModal = ({ isOpen, onClose, onTransactionCreate
                 <input
                   type="text"
                   value={formData.merchant_name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, merchant_name: e.target.value })
-                  }
+                  onChange={(e) => updateField('merchant_name', e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm focus:border-blue-500 focus:outline-none"
                 />
               </div>
@@ -182,12 +200,7 @@ export const TransactionSimulatorModal = ({ isOpen, onClose, onTransactionCreate
                       type="number"
                       step="0.01"
                       value={formData[vKey] ?? 0}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          [vKey]: parseFloat(e.target.value) || 0,
-                        })
-                      }
+                      onChange={(e) => updateField(vKey, parseFloat(e.target.value) || 0)}
                       className="w-full px-2 py-1 rounded bg-slate-900/90 border border-slate-700 text-xs font-mono text-white focus:border-blue-500 focus:outline-none"
                     />
                   </div>
@@ -216,6 +229,12 @@ export const TransactionSimulatorModal = ({ isOpen, onClose, onTransactionCreate
               </button>
             </div>
           </form>
+
+          {errorMsg && (
+            <div className="p-3.5 rounded-xl bg-red-950/60 border border-red-800/80 text-xs text-red-300">
+              {errorMsg}
+            </div>
+          )}
 
           {/* AI Result Card */}
           {result && (

@@ -1,0 +1,34 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Large Dataset files
+creditcard.csv
+*.csv
+
+# Python runtime artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+backend/__pycache__/
+backend/*/__pycache__/
+ml_pipeline/__pycache__/
+
+# Node / Frontend artifacts
+node_modules/
+frontend/node_modules/
+frontend/dist/
+.vite/
+
+# Output reports & plots generated at runtime
+reports_output/*.pdf
+shap_outputs/
+evaluation_outputs/
+eda_outputs/
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
